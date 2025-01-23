@@ -124,3 +124,146 @@ add_filter('the_content', 'display_book_details');
 ?>
 
 ```
+
+
+v2 with text editor not tested! 
+
+```PHP
+
+<?php
+// Register Custom Post Type
+function create_book_post_type() {
+    register_post_type('book',
+        array(
+            'labels' => array(
+                'name' => __('Books'),
+                'singular_name' => __('Book')
+            ),
+            'public' => true,
+            'has_archive' => true,
+            'supports' => array('title', 'editor', 'thumbnail', 'custom-fields'),
+            'menu_icon' => 'dashicons-book-alt'
+        )
+    );
+}
+add_action('init', 'create_book_post_type');
+
+// Add Custom Meta Boxes
+function book_custom_meta_boxes() {
+    add_meta_box(
+        'book_details_meta_box',
+        'Book Details',
+        'render_book_details_meta_box',
+        'book',
+        'normal',
+        'high'
+    );
+}
+add_action('add_meta_boxes', 'book_custom_meta_boxes');
+
+// Render Custom Meta Box
+function render_book_details_meta_box($post) {
+    wp_nonce_field('book_details_nonce', 'book_details_nonce');
+
+    // Retrieve existing meta values
+    $author = get_post_meta($post->ID, '_book_author', true);
+    $isbn = get_post_meta($post->ID, '_book_isbn', true);
+    $publication_year = get_post_meta($post->ID, '_book_publication_year', true);
+    $book_description = get_post_meta($post->ID, '_book_description', true);
+    ?>
+    <div>
+        <label for="book_author">Author:</label>
+        <input type="text" id="book_author" name="book_author" 
+               value="<?php echo esc_attr($author); ?>" style="width:100%;" />
+    </div>
+    <div>
+        <label for="book_isbn">ISBN:</label>
+        <input type="text" id="book_isbn" name="book_isbn" 
+               value="<?php echo esc_attr($isbn); ?>" style="width:100%;" />
+    </div>
+    <div>
+        <label for="book_publication_year">Publication Year:</label>
+        <input type="number" id="book_publication_year" name="book_publication_year" 
+               value="<?php echo esc_attr($publication_year); ?>" style="width:100%;" />
+    </div>
+    <div>
+        <label>Book Description (WYSIWYG):</label>
+        <?php
+        wp_editor(
+            wp_kses_post($book_description), 
+            'book_description', 
+            array(
+                'textarea_name' => 'book_description',
+                'textarea_rows' => 10,
+                'media_buttons' => true,
+                'teeny' => false,
+                'quicktags' => true,
+                'tinymce' => array(
+                    'toolbar1' => 'bold,italic,underline,strikethrough,bullist,numlist,link,unlink,table,wp_adv',
+                    'toolbar2' => 'formatselect,alignleft,aligncenter,alignright,undo,redo,removeformat'
+                )
+            )
+        );
+        ?>
+    </div>
+    <?php
+}
+
+// Save Meta Box Data
+function save_book_details_meta($post_id) {
+    // Security checks
+    if (!isset($_POST['book_details_nonce']) || 
+        !wp_verify_nonce($_POST['book_details_nonce'], 'book_details_nonce')) {
+        return;
+    }
+
+    if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+        return;
+    }
+
+    // Save custom fields
+    $fields = [
+        'book_author' => '_book_author',
+        'book_isbn' => '_book_isbn',
+        'book_publication_year' => '_book_publication_year',
+        'book_description' => '_book_description'
+    ];
+
+    foreach ($fields as $input_name => $meta_key) {
+        if (isset($_POST[$input_name])) {
+            $value = $input_name === 'book_description' 
+                ? wp_kses_post($_POST[$input_name])
+                : sanitize_text_field($_POST[$input_name]);
+            
+            update_post_meta($post_id, $meta_key, $value);
+        }
+    }
+}
+add_action('save_post', 'save_book_details_meta');
+
+// Display Custom Fields in Frontend
+function display_book_details($content) {
+    if (get_post_type() == 'book') {
+        $author = get_post_meta(get_the_ID(), '_book_author', true);
+        $isbn = get_post_meta(get_the_ID(), '_book_isbn', true);
+        $publication_year = get_post_meta(get_the_ID(), '_book_publication_year', true);
+        $book_description = get_post_meta(get_the_ID(), '_book_description', true);
+
+        $custom_content = '<div class="book-details">';
+        $custom_content .= '<strong>Author:</strong> ' . esc_html($author) . '<br>';
+        $custom_content .= '<strong>ISBN:</strong> ' . esc_html($isbn) . '<br>';
+        $custom_content .= '<strong>Publication Year:</strong> ' . esc_html($publication_year);
+        $custom_content .= '</div>';
+
+        $custom_content .= '<div class="book-full-description">';
+        $custom_content .= wp_kses_post($book_description);
+        $custom_content .= '</div>';
+
+        $content .= $custom_content;
+    }
+    return $content;
+}
+add_filter('the_content', 'display_book_details');
+?>
+
+```
